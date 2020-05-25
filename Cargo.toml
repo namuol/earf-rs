@@ -1,0 +1,10 @@
+[package]
+name = "earf-rs"
+version = "0.1.0"
+authors = ["Louis Acresti <louis.acresti@gmail.com>"]
+edition = "2018"
+
+[dependencies.sdl2]
+version = "0.34.0"
+default-features = false
+features = ["image"]
