@@ -15,8 +15,7 @@
 //     @
 //   len: ->
 //     return Math.sqrt @x*@x + @y*@y + @z*@z
-
-use std::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Sub, SubAssign};
+use std::ops;
 
 #[derive(Debug, PartialEq)]
 pub struct Vector {
@@ -25,161 +24,61 @@ pub struct Vector {
   z: f64,
 }
 
-impl Add for Vector {
-  type Output = Vector;
-
-  fn add(self, other: Vector) -> Vector {
-    Vector {
-      x: self.x + other.x,
-      y: self.y + other.y,
-      z: self.z + other.z,
-    }
+impl_op_ex!(+ |a: &Vector, b: &Vector| -> Vector {
+  Vector {
+    x: a.x + b.x,
+    y: a.y + b.y,
+    z: a.z + b.z,
   }
-}
+});
 
-impl Sub for Vector {
-  type Output = Vector;
-
-  fn sub(self, other: Vector) -> Vector {
-    Vector {
-      x: self.x - other.x,
-      y: self.y - other.y,
-      z: self.z - other.z,
-    }
+impl_op_ex!(-|a: &Vector, b: &Vector| -> Vector {
+  Vector {
+    x: a.x - b.x,
+    y: a.y - b.y,
+    z: a.z - b.z,
   }
-}
+});
 
-impl Mul<f64> for Vector {
-  type Output = Vector;
-  fn mul(self, scalar: f64) -> Vector {
-    Vector {
-      x: self.x * scalar,
-      y: self.y * scalar,
-      z: self.z * scalar,
-    }
+impl_op_ex!(*|a: &Vector, b: f64| -> Vector {
+  Vector {
+    x: a.x * b,
+    y: a.y * b,
+    z: a.z * b,
   }
-}
+});
 
-impl Div<f64> for Vector {
-  type Output = Vector;
-  fn div(self, scalar: f64) -> Vector {
-    Vector {
-      x: self.x / scalar,
-      y: self.y / scalar,
-      z: self.z / scalar,
-    }
+impl_op_ex!(/|a: &Vector, b: f64| -> Vector {
+  Vector {
+    x: a.x / b,
+    y: a.y / b,
+    z: a.z / b,
   }
-}
+});
 
-impl Add<Vector> for &Vector {
-  type Output = Vector;
+impl_op_ex!(+=|a: &mut Vector, b: &Vector| {
+  a.x += b.x;
+  a.y += b.y;
+  a.z += b.z;
+});
 
-  fn add(self, other: Vector) -> Vector {
-    Vector {
-      x: self.x + other.x,
-      y: self.y + other.y,
-      z: self.z + other.z,
-    }
-  }
-}
+impl_op_ex!(-=|a: &mut Vector, b: &Vector| {
+  a.x -= b.x;
+  a.y -= b.y;
+  a.z -= b.z;
+});
 
-impl Sub<Vector> for &Vector {
-  type Output = Vector;
+impl_op_ex!(*=|a: &mut Vector, b: f64| {
+  a.x *= b;
+  a.y *= b;
+  a.z *= b;
+});
 
-  fn sub(self, other: Vector) -> Vector {
-    Vector {
-      x: self.x - other.x,
-      y: self.y - other.y,
-      z: self.z - other.z,
-    }
-  }
-}
-
-impl Mul<f64> for &Vector {
-  type Output = Vector;
-  fn mul(self, scalar: f64) -> Vector {
-    Vector {
-      x: self.x * scalar,
-      y: self.y * scalar,
-      z: self.z * scalar,
-    }
-  }
-}
-
-impl Div<f64> for &Vector {
-  type Output = Vector;
-  fn div(self, scalar: f64) -> Vector {
-    Vector {
-      x: self.x / scalar,
-      y: self.y / scalar,
-      z: self.z / scalar,
-    }
-  }
-}
-
-impl AddAssign<Vector> for Vector {
-  fn add_assign(&mut self, other: Vector) {
-    self.x += other.x;
-    self.y += other.y;
-    self.z += other.z;
-  }
-}
-
-impl SubAssign<Vector> for Vector {
-  fn sub_assign(&mut self, other: Vector) {
-    self.x -= other.x;
-    self.y -= other.y;
-    self.z -= other.z;
-  }
-}
-
-impl MulAssign<f64> for Vector {
-  fn mul_assign(&mut self, scalar: f64) {
-    self.x *= scalar;
-    self.y *= scalar;
-    self.z *= scalar;
-  }
-}
-
-impl DivAssign<f64> for Vector {
-  fn div_assign(&mut self, scalar: f64) {
-    self.x /= scalar;
-    self.y /= scalar;
-    self.z /= scalar;
-  }
-}
-
-impl AddAssign<Vector> for &mut Vector {
-  fn add_assign(&mut self, other: Vector) {
-    self.x += other.x;
-    self.y += other.y;
-    self.z += other.z;
-  }
-}
-
-impl SubAssign<Vector> for &mut Vector {
-  fn sub_assign(&mut self, other: Vector) {
-    self.x -= other.x;
-    self.y -= other.y;
-    self.z -= other.z;
-  }
-}
-
-impl MulAssign<f64> for &mut Vector {
-  fn mul_assign(&mut self, scalar: f64) {
-    self.x *= scalar;
-    self.y *= scalar;
-    self.z *= scalar;
-  }
-}
-
-impl DivAssign<f64> for &mut Vector {
-  fn div_assign(&mut self, scalar: f64) {
-    self.x /= scalar;
-    self.y /= scalar;
-    self.z /= scalar;
-  }
-}
+impl_op_ex!(/=|a: &mut Vector, b: f64| {
+  a.x /= b;
+  a.y /= b;
+  a.z /= b;
+});
 
 impl Vector {
   pub fn length_squared(&self) -> f64 {
