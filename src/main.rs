@@ -14,12 +14,20 @@ pub mod vector;
 use crate::camera::Camera;
 use crate::vector::Vector;
 
-const SCREEN_WIDTH: u32 = 160;
-const SCREEN_HEIGHT: u32 = 100;
+const SCREEN_WIDTH: u32 = 160 * 2;
+const SCREEN_HEIGHT: u32 = 100 * 2;
 
-const SCREEN_SCALE: u32 = 4;
+const SCREEN_SCALE: u32 = 3;
 
-const MAX_D: f64 = 512.0;
+const MAX_D: f64 = 1024.0;
+const LOD_FACTOR: u32 = 4;
+const DETAIL: u32 = 1;
+
+const FOG_COLOR: RGB = RGB {
+    r: 98,
+    g: 192,
+    b: 255,
+};
 
 pub fn main() {
     let sdl_context = sdl2::init().unwrap();
@@ -56,12 +64,6 @@ pub fn main() {
     );
     cam.set_angle(-std::f64::consts::PI);
 
-    let mut surface = sdl2::surface::Surface::new(
-        SCREEN_WIDTH,
-        SCREEN_HEIGHT,
-        sdl2::pixels::PixelFormatEnum::RGB24,
-    );
-
     let mut canvas = window.into_canvas().present_vsync().build().unwrap();
     let texture_creator = canvas.texture_creator();
     let mut screen_texture = texture_creator
@@ -71,15 +73,34 @@ pub fn main() {
             SCREEN_HEIGHT,
         )
         .unwrap();
-    let screen_texture_pixel_format = screen_texture.query().format;
+    screen_texture.set_blend_mode(sdl2::render::BlendMode::Blend);
+    canvas.set_draw_color(FOG_COLOR);
     canvas.clear();
     canvas.present();
 
     let mut event_pump = sdl_context.event_pump().unwrap();
+    let mut angle: f64 = 0.0;
     'running: loop {
-        // canvas.clear();
+        for event in event_pump.poll_iter() {
+            match event {
+                Event::Quit { .. }
+                | Event::KeyDown {
+                    keycode: Some(Keycode::Escape),
+                    ..
+                } => break 'running,
+                _ => {}
+            }
+        }
+
+        // cam.set_angle(angle);
+        cam.eye.y = 84.0 - 20.0 * (angle * 2.0).sin();
+        cam.eye.x = 127.0 + 512.0 * (angle).sin();
+        cam.eye.z = 127.0 + 512.0 * (angle * 0.8).cos();
+        angle += 0.01;
+
+        canvas.clear();
         screen_texture
-            .with_lock(None, |mut screen, size| {
+            .with_lock(None, |mut screen, _size| {
                 cast(&cam, &heightmap, &colormap, &mut screen);
                 // let mut x = 0;
                 // while x < colormap.width && x < SCREEN_WIDTH {
@@ -99,28 +120,13 @@ pub fn main() {
             .unwrap();
         canvas.copy(&screen_texture, None, None).unwrap();
         canvas.present();
-        for event in event_pump.poll_iter() {
-            match event {
-                Event::Quit { .. }
-                | Event::KeyDown {
-                    keycode: Some(Keycode::Escape),
-                    ..
-                } => break 'running,
-                _ => {}
-            }
-        }
-        // canvas.present();
         // ::std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));
     }
 }
 
-const LOD_FACTOR: u32 = 4;
-const DETAIL: u32 = 1;
-
 fn cast(cam: &Camera, heightmap: &Map, colormap: &Map, screen: &mut [u8]) {
     let mut x = 0;
     let screen_height = cam.screen_height;
-
     while x < cam.screen_width {
         let mut max_y: i32 = (cam.screen_height - 1) as i32;
         let ray = cam.get_ray_from_uv(x, 0);
@@ -134,7 +140,8 @@ fn cast(cam: &Camera, heightmap: &Map, colormap: &Map, screen: &mut [u8]) {
                 let r = heightmap.pixel_at(cx, cz).r;
                 let h = r as f64 * 0.25;
                 let y = ((screen_height as f64)
-                    - (((h - cam.eye.y) * 150.0) / (d as f64) + (screen_height as f64)))
+                    - (((h - cam.eye.y) * (screen_height as f64 * 2.0)) / (d as f64)
+                        + (screen_height as f64)))
                     .floor() as i32;
 
                 if y >= 0 {
@@ -167,6 +174,12 @@ struct RGB {
     pub r: u8,
     pub g: u8,
     pub b: u8,
+}
+
+impl Into<Color> for RGB {
+    fn into(self) -> Color {
+        Color::RGB(self.r, self.g, self.b)
+    }
 }
 
 struct Map {
