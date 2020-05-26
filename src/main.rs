@@ -15,8 +15,11 @@ pub mod vector;
 use crate::camera::Camera;
 use crate::vector::Vector;
 
-const SCREEN_WIDTH: u32 = 160 * 2;
-const SCREEN_HEIGHT: u32 = 100 * 2;
+const SCREEN_WIDTH: u32 = 320;
+const SCREEN_HEIGHT: u32 = 200;
+
+// const SCREEN_WIDTH: u32 = 160;
+// const SCREEN_HEIGHT: u32 = 100;
 
 const SCREEN_SCALE: u32 = 3;
 
@@ -142,49 +145,51 @@ pub fn main() {
 }
 
 fn cast(cam: &Camera, heightmap: &Map, colormap: &Map, screen: &mut [u8]) {
-    let mut x = 0;
     let screen_height = cam.screen_height;
-    while x < cam.screen_width {
-        let mut max_y: i32 = (cam.screen_height - 1) as i32;
-        let ray = cam.get_ray_from_uv(x, 0);
-        let mut d: u32 = 15;
-        let mut lod = 1;
-        while lod < LOD_FACTOR {
-            let maxd = (MAX_D as f64) / ((LOD_FACTOR as f64) - (lod as f64));
-            while (d as f64) < maxd {
-                let cx = (cam.eye.x + ray.x * d as f64).floor() as u32;
-                let cz = (cam.eye.z + ray.z * d as f64).floor() as u32;
-                let r = heightmap.pixel_at(cx, cz).r;
-                let h = r as f64 * 0.25;
-                let y = ((screen_height as f64)
-                    - (((h - cam.eye.y) * (screen_height as f64 * 2.0)) / (d as f64)
-                        + (screen_height as f64)))
-                    .floor() as i32;
-
-                if y >= 0 {
-                    if y < max_y {
-                        let mut current_y: i32 = max_y;
-                        let fog = 1.0 - ((d as f64) - 100.0) / (MAX_D - 100.0);
-                        let color = colormap.pixel_at(cx, cz);
-                        while current_y > y && current_y < (cam.screen_height as i32) {
-                            let index: usize = x as usize * (cam.screen_height as usize * 4)
-                                + (current_y * 4) as usize;
-                            screen[index] = color.b;
-                            screen[index + 1] = color.g;
-                            screen[index + 2] = color.r;
-                            screen[index + 3] = (fog * 255.0).floor() as u8;
-                            current_y -= 1;
+    screen
+        .par_chunks_mut((cam.screen_height * 4) as usize)
+        .enumerate()
+        .for_each(|(x, row)| {
+            let mut max_y: i32 = (cam.screen_height - 1) as i32;
+            let ray = cam.get_ray_from_uv(x as u32, 0);
+            let mut d: u32 = 15;
+            let mut lod = 1;
+            while lod < LOD_FACTOR {
+                let maxd = (MAX_D as f64) / ((LOD_FACTOR as f64) - (lod as f64));
+                while (d as f64) < maxd {
+                    let cx = (cam.eye.x + ray.x * d as f64).floor() as u32;
+                    let cz = (cam.eye.z + ray.z * d as f64).floor() as u32;
+                    let r = heightmap.pixel_at(cx, cz).r;
+                    let h = r as f64 * 0.25;
+                    let y = ((screen_height as f64)
+                        - (((h - cam.eye.y) * (screen_height as f64 * 2.0)) / (d as f64)
+                            + (screen_height as f64)))
+                        .floor() as i32;
+                    if y >= 0 {
+                        if y < max_y {
+                            let mut current_y: i32 = max_y;
+                            let fog = 1.0 - ((d as f64) - 100.0) / (MAX_D - 100.0);
+                            let color = colormap.pixel_at(cx, cz);
+                            while current_y > y && current_y < (cam.screen_height as i32) {
+                                let index: usize = (current_y * 4) as usize;
+                                // row[index] = (current_y % 255) as u8;
+                                // row[index + 1] = (current_y % 255) as u8;
+                                // row[index + 2] = (current_y % 255) as u8;
+                                // row[index + 3] = 255;
+                                row[index] = color.b;
+                                row[index + 1] = color.g;
+                                row[index + 2] = color.r;
+                                row[index + 3] = (fog * 255.0).floor() as u8;
+                                current_y -= 1;
+                            }
+                            max_y = y;
                         }
-                        max_y = y;
                     }
+                    d += DETAIL * lod;
                 }
-
-                d += DETAIL * lod;
+                lod += 1;
             }
-            lod += 1;
-        }
-        x += 1;
-    }
+        });
 }
 
 struct RGB {
