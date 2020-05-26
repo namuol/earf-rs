@@ -15,16 +15,16 @@ pub mod vector;
 use crate::camera::Camera;
 use crate::vector::Vector;
 
-const SCREEN_WIDTH: u32 = 320;
-const SCREEN_HEIGHT: u32 = 200;
+const SCREEN_WIDTH: u32 = 640;
+const SCREEN_HEIGHT: u32 = 400;
 
 // const SCREEN_WIDTH: u32 = 160;
 // const SCREEN_HEIGHT: u32 = 100;
 
-const SCREEN_SCALE: u32 = 3;
+const SCREEN_SCALE: u32 = 2;
 
 const MAX_D: f64 = 1024.0;
-const LOD_FACTOR: u32 = 4;
+const LOD_FACTOR: u32 = 3;
 const DETAIL: u32 = 1;
 
 const FOG_COLOR: RGB = RGB {
@@ -117,10 +117,10 @@ pub fn main() {
         }
 
         // cam.set_angle(angle);
-        cam.eye.y = 84.0 - 20.0 * (angle * 2.0).sin();
+        cam.eye.y = 94.0 - 10.0 * (angle * 2.0).sin();
         cam.eye.x = 127.0 + 512.0 * (angle).sin();
         cam.eye.z = 127.0 + 512.0 * (angle * 0.8).cos();
-        angle += 0.01;
+        angle += 0.0025;
 
         canvas.clear();
         screen_texture
