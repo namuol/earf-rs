@@ -17,13 +17,19 @@ use crate::vector::Vector;
 const SCREEN_WIDTH: u32 = 160;
 const SCREEN_HEIGHT: u32 = 100;
 
+const SCREEN_SCALE: u32 = 4;
+
 const MAX_D: f64 = 512.0;
 
 pub fn main() {
     let sdl_context = sdl2::init().unwrap();
     let video_subsystem = sdl_context.video().unwrap();
     let window = video_subsystem
-        .window("earf-rs", SCREEN_WIDTH, SCREEN_HEIGHT)
+        .window(
+            "earf-rs",
+            SCREEN_WIDTH * SCREEN_SCALE,
+            SCREEN_HEIGHT * SCREEN_SCALE,
+        )
         .position_centered()
         .build()
         .unwrap();
@@ -41,7 +47,7 @@ pub fn main() {
     let mut cam = Camera::new(
         Vector {
             x: 127.0,
-            y: 64.0,
+            y: 90.0,
             z: 127.0,
         },
         25.0,
@@ -65,21 +71,34 @@ pub fn main() {
             SCREEN_HEIGHT,
         )
         .unwrap();
+    let screen_texture_pixel_format = screen_texture.query().format;
     canvas.clear();
     canvas.present();
 
     let mut event_pump = sdl_context.event_pump().unwrap();
-    // let mut i = 0;
     'running: loop {
-        // i = (i + 1) % 255;
-        // canvas.set_draw_color(Color::RGB(i, 64, 255 - i));
         // canvas.clear();
         screen_texture
-            .with_lock(None, |mut screen, _size| {
+            .with_lock(None, |mut screen, size| {
                 cast(&cam, &heightmap, &colormap, &mut screen);
+                // let mut x = 0;
+                // while x < colormap.width && x < SCREEN_WIDTH {
+                //     let mut y = 0;
+                //     while y < colormap.height && y < SCREEN_HEIGHT {
+                //         let color = colormap.pixel_at(x, y);
+                //         let pos = y as usize * size + (x * 4) as usize;
+                //         screen[pos] = color.b;
+                //         screen[pos + 1] = color.g;
+                //         screen[pos + 2] = color.r;
+                //         screen[pos + 3] = 255;
+                //         y += 1;
+                //     }
+                //     x += 1;
+                // }
             })
             .unwrap();
         canvas.copy(&screen_texture, None, None).unwrap();
+        canvas.present();
         for event in event_pump.poll_iter() {
             match event {
                 Event::Quit { .. }
@@ -95,40 +114,51 @@ pub fn main() {
     }
 }
 
+const LOD_FACTOR: u32 = 4;
+const DETAIL: u32 = 1;
+
 fn cast(cam: &Camera, heightmap: &Map, colormap: &Map, screen: &mut [u8]) {
     let mut x = 0;
     let screen_height = cam.screen_height;
-    let max_y: u32 = (cam.screen_height - 1) as u32;
 
     while x < cam.screen_width {
+        let mut max_y: i32 = (cam.screen_height - 1) as i32;
         let ray = cam.get_ray_from_uv(x, 0);
-        let d: u32 = 15;
+        let mut d: u32 = 15;
+        let mut lod = 1;
+        while lod < LOD_FACTOR {
+            let maxd = (MAX_D as f64) / ((LOD_FACTOR as f64) - (lod as f64));
+            while (d as f64) < maxd {
+                let cx = (cam.eye.x + ray.x * d as f64).floor() as u32;
+                let cz = (cam.eye.z + ray.z * d as f64).floor() as u32;
+                let r = heightmap.pixel_at(cx, cz).r;
+                let h = r as f64 * 0.25;
+                let y = ((screen_height as f64)
+                    - (((h - cam.eye.y) * 150.0) / (d as f64) + (screen_height as f64)))
+                    .floor() as i32;
 
-        let cx = (cam.eye.x + ray.x).floor() as u32;
-        let cz = (cam.eye.z + ray.z).floor() as u32;
-        let r = heightmap.pixel_at(cx, cz).r;
-        let h = r as f64 * 0.25;
-        let y = (screen_height as f64 - (((h - cam.eye.y) * 150.0) / ((d + screen_height) as f64)))
-            .floor() as i32;
+                if y >= 0 {
+                    if y < max_y {
+                        let mut current_y: i32 = max_y;
+                        let fog = 1.0 - ((d as f64) - 100.0) / (MAX_D - 100.0);
+                        let color = colormap.pixel_at(cx, cz);
+                        while current_y > y && current_y < (cam.screen_height as i32) {
+                            let index: usize = current_y as usize * (cam.screen_width as usize * 4)
+                                + (x * 4) as usize;
+                            screen[index] = color.b;
+                            screen[index + 1] = color.g;
+                            screen[index + 2] = color.r;
+                            screen[index + 3] = (fog * 255.0).floor() as u8;
+                            current_y -= 1;
+                        }
+                        max_y = y;
+                    }
+                }
 
-        if y < 0 {
-            break;
-        }
-        let y: u32 = y as u32;
-        if y < max_y {
-            let fog = 1.0 - ((d as f64) - 100.0) / (MAX_D - 100.0);
-            let color = colormap.pixel_at(cx, cz);
-            let mut current_y: u32 = max_y;
-            while current_y > y && current_y < cam.screen_height {
-                let index: usize = (x + (current_y * cam.screen_width) * 4) as usize;
-                screen[index] = color.r;
-                screen[index + 1] = color.g;
-                screen[index + 2] = color.b;
-                screen[index + 3] = ((0xff as f64) * fog) as u8;
-                current_y -= 1;
+                d += DETAIL * lod;
             }
+            lod += 1;
         }
-
         x += 1;
     }
 }
@@ -155,7 +185,7 @@ impl Map {
             for y in 0..height {
                 let mut row: Vec<RGB> = Vec::with_capacity(width as usize);
                 for x in 0..width {
-                    let pixel_pos = (y * (pitch / 4) + x) as usize;
+                    let pixel_pos = (y * pitch + (x * 3)) as usize;
                     row.push(RGB {
                         r: pixels[pixel_pos],
                         g: pixels[pixel_pos + 1],
