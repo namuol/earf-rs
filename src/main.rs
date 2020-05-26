@@ -1,12 +1,13 @@
 #[macro_use]
 extern crate impl_ops;
+extern crate rayon;
 extern crate sdl2;
 
+use rayon::prelude::*;
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
 use sdl2::pixels::Color;
 use std::path::Path;
-// use std::time::Duration;
 
 pub mod camera;
 pub mod vector;
@@ -66,11 +67,31 @@ pub fn main() {
 
     let mut canvas = window.into_canvas().present_vsync().build().unwrap();
     let texture_creator = canvas.texture_creator();
+
+    let rotated_screen_texture_rect_stretched = sdl2::rect::Rect::new(
+        ((SCREEN_WIDTH * SCREEN_SCALE) as i32 - (SCREEN_HEIGHT * SCREEN_SCALE) as i32) / 2,
+        ((SCREEN_HEIGHT * SCREEN_SCALE) as i32 - (SCREEN_WIDTH * SCREEN_SCALE) as i32) / 2,
+        SCREEN_HEIGHT * SCREEN_SCALE,
+        SCREEN_WIDTH * SCREEN_SCALE,
+    );
     let mut screen_texture = texture_creator
         .create_texture_streaming(
             texture_creator.default_pixel_format(),
-            SCREEN_WIDTH,
+            // NOTE: We swap width/height here intentionally.
+            //
+            // Why? The image is stored left to right, top to bottom, in one
+            // long array. In other words, if we wanted to split up the image
+            // into sections to render with multiple threads, it would be ideal
+            // to work with individual rows, but our raycasting algorithm
+            // actually works one *column* at a time.
+            //
+            // By drawing onto this rotated image, we can split the array up
+            // simply into slices, one for each row.
+            //
+            // After we render to our texture, we can simply rotate our texture
+            // when we copy it into our canvas.
             SCREEN_HEIGHT,
+            SCREEN_WIDTH,
         )
         .unwrap();
     screen_texture.set_blend_mode(sdl2::render::BlendMode::Blend);
@@ -102,23 +123,19 @@ pub fn main() {
         screen_texture
             .with_lock(None, |mut screen, _size| {
                 cast(&cam, &heightmap, &colormap, &mut screen);
-                // let mut x = 0;
-                // while x < colormap.width && x < SCREEN_WIDTH {
-                //     let mut y = 0;
-                //     while y < colormap.height && y < SCREEN_HEIGHT {
-                //         let color = colormap.pixel_at(x, y);
-                //         let pos = y as usize * size + (x * 4) as usize;
-                //         screen[pos] = color.b;
-                //         screen[pos + 1] = color.g;
-                //         screen[pos + 2] = color.r;
-                //         screen[pos + 3] = 255;
-                //         y += 1;
-                //     }
-                //     x += 1;
-                // }
             })
             .unwrap();
-        canvas.copy(&screen_texture, None, None).unwrap();
+        canvas
+            .copy_ex(
+                &screen_texture,
+                None,
+                rotated_screen_texture_rect_stretched,
+                90.0,
+                None,
+                false,
+                false,
+            )
+            .unwrap();
         canvas.present();
         // ::std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));
     }
@@ -150,8 +167,8 @@ fn cast(cam: &Camera, heightmap: &Map, colormap: &Map, screen: &mut [u8]) {
                         let fog = 1.0 - ((d as f64) - 100.0) / (MAX_D - 100.0);
                         let color = colormap.pixel_at(cx, cz);
                         while current_y > y && current_y < (cam.screen_height as i32) {
-                            let index: usize = current_y as usize * (cam.screen_width as usize * 4)
-                                + (x * 4) as usize;
+                            let index: usize = x as usize * (cam.screen_height as usize * 4)
+                                + (current_y * 4) as usize;
                             screen[index] = color.b;
                             screen[index + 1] = color.g;
                             screen[index + 2] = color.r;
@@ -219,4 +236,9 @@ impl Map {
     pub fn pixel_at(&self, x: u32, y: u32) -> &RGB {
         &self.data[(y % self.height) as usize][(x % self.width) as usize]
     }
+}
+
+struct Ray {
+    x: u32,
+    vector: Vector,
 }
